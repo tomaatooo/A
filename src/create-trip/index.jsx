@@ -1,14 +1,20 @@
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { SelectBudgetOptions, SelectTravelsList } from '@/constants/options'
+import { AI_PROMPT, SelectBudgetOptions, SelectTravelsList } from '@/constants/options'
+import { chatSession } from '@/service/AiModel'
+import { db } from '@/service/FirebaseConfig'
+import { doc, setDoc } from 'firebase/firestore'
 import React, { useEffect, useState } from 'react'
 import GooglePlacesAutocomplete from 'react-google-places-autocomplete'
+import { useNavigate, useNavigation } from 'react-router-dom'
 import { toast } from 'sonner'
 
 const CreateTrip = () => {
 
   const [place, setPlace] = useState()
   const [formData,setFormData]=useState([])
+  const [loading,setLoading]=useState(false)
+  const navigate=useNavigate();
 
   const handleInputChange=(name,value)=>{
     setFormData({
@@ -17,17 +23,39 @@ const CreateTrip = () => {
     } )
   }
 
+  const SaveAITrip=async(TripData)=>{
+    const docId=Date.now().toString()
+    
+    await setDoc(doc(db,"Trips",docId),{
+      userSelection:formData,
+      tripData:JSON.parse(TripData),
+      id:docId
+    })
+    navigate('/view-trip/'+docId)
+  }
+
   useEffect(()=>{
     
   },[formData])
 
 
-  const onGenerateTrip=()=>{
+  const onGenerateTrip=async()=>{
     if(formData?.noOfDays>5&&!formData?.location||!formData?.budget||!formData?.traveller){
       toast("Please fill all details")
       return;
     }
-    console.log(formData)
+
+    setLoading(true)
+
+    const FINAL_PROMPT=AI_PROMPT.replace('{location}',formData?.location).replace('{totalDays}',formData?.noOfDays).replace('{traveller}',formData?.traveller).replace('{budget}',formData?.budget).replace('{totalDays}',formData?.noOfDays)
+
+    console.log(FINAL_PROMPT)
+
+    const result=await chatSession.sendMessage(FINAL_PROMPT)
+
+    console.log(result?.response?.text())
+    SaveAITrip(result?.response?.text())
+    setLoading(false)
   }
   return (
     <div className='sm:px-10 md:px-32 lg-px-56 xl:px-72 px-5 mt-10'>
@@ -77,7 +105,7 @@ const CreateTrip = () => {
         </div>
       </div>
       <div className='my-10 flex justify-end'>
-      <Button onClick={onGenerateTrip}>Generate Trip!</Button>
+      <Button onClick={onGenerateTrip} disabled={loading}>{loading?'Loading..':'Generate Trip!'}</Button>
       </div>
           
     </div>
